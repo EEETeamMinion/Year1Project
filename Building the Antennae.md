@@ -14,6 +14,7 @@ f_0=\frac{1}{2\pi \sqrt{LC}}
 C=3.87nF
 \end{aligned}
 $$
+
  ![[Pasted image 20260513214651.png]]
 Here's a picture of our tuned circuit for the resonant frequency of 89kHz.
 
