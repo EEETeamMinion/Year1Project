@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="index.js" defer></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <title>Rover Control</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 700px;
+      width: 100%;
+    }
+
+    .panel {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 14px;
+      padding: 20px 22px;
+    }
+
+    .panel-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: #555c7a;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    /* D-pad */
+    .dpad {
+      display: grid;
+      grid-template-areas:
+        ". up ."
+        "left . right"
+        ". down .";
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      width: 180px;
+      margin: 0 auto;
+    }
+
+    .db {
+      background: #22253a;
+      border: 1px solid #2e3247;
+      border-radius: 10px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      color: #8890b0;
+      transition: background 0.1s, color 0.1s, transform 0.08s;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .db:hover { background: #1e3a5f; color: #5ba3e0; border-color: #2a5080; }
+    .db.active { background: #1e3a5f; color: #5ba3e0; border-color: #2a5080; transform: scale(0.92); }
+
+    .db svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .hint {
+      text-align: center;
+      font-size: 11px;
+      color: #3e4460;
+      margin-top: 14px;
+    }
+
+    /* Sensors */
+    .sensor-row { display: flex; flex-direction: column; gap: 10px; }
+
+    .sensor-card {
+      background: #13151e;
+      border: 1px solid #22253a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .sensor-name {
+      font-size: 13px;
+      color: #666e90;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .sensor-name svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+    .sensor-right { display: flex; align-items: center; gap: 10px; }
+
+    .sensor-val {
+      font-family: 'Courier New', monospace;
+      font-size: 15px;
+      font-weight: 600;
+      color: #d0d8f0;
+      min-width: 80px;
+      text-align: right;
+    }
+
+    .sensor-unit { font-size: 11px; color: #555c7a; margin-left: 2px; }
+
+    .bar-wrap { width: 68px; height: 4px; background: #22253a; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; background: #1D9E75; transition: width 0.5s ease; }
+
+    @media (max-width: 500px) {
+      .container { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="panel">
+    <div class="panel-label">Drive controls</div>
+    <div class="dpad">
+      <button class="db" style="grid-area:up" id="btn-fwd" aria-label="Forward">
+        <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+      <button class="db" style="grid-area:left" id="btn-left" aria-label="Turn left">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="db" style="grid-area:right" id="btn-right" aria-label="Turn right">
+        <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button class="db" style="grid-area:down" id="btn-bwd" aria-label="Reverse">
+        <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+    <div class="hint">W A S D or arrow keys</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">Sensor readings</div>
+    <div class="sensor-row">
+
+      <div class="sensor-card">
+        <span class="sensor-name">
+          <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 1 5 5c0 5-5 13-5 13S7 12 7 7a5 5 0 0 1 5-5z"/><circle cx="12" cy="7" r="2"/></svg>
+          Magnetometer
+        </span>
+        <div class="sensor-right">
+          <span class="sensor-val" id="mag-val">342<span class="sensor-unit"> µT</span></span>
+        </div>
+      </div>
+
+      <div class="sensor-card">
+        <span class="sensor-name">
+          <svg viewBox="0 0 24 24"><path d="M2 12 Q6 4 10 12 Q14 20 18 12 Q20 8 22 12"/></svg>
+          Infra-red
+        </span>
+        <div class="sensor-right">
+          <div class="bar-wrap"><div class="bar-fill" id="ir-bar" style="width:60%"></div></div>
+          <span class="sensor-val" id="ir-val">0.60<span class="sensor-unit"> V</span></span>
+        </div>
+      </div>
+
+      <div class="sensor-card">
+        <span class="sensor-name">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5a9 9 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><line x1="12" y1="20" x2="12" y2="20" stroke-width="3" stroke-linecap="round"/></svg>
+          Radio signal
+        </span>
+        <div class="sensor-right">
+          <div class="bar-wrap"><div class="bar-fill" id="rssi-bar" style="width:78%"></div></div>
+          <span class="sensor-val" id="rssi-val">-45<span class="sensor-unit"> dBm</span></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- <script>
+  const btnForDir = { fwd: 'btn-fwd', bwd: 'btn-bwd', left: 'btn-left', right: 'btn-right' };
+  const keyDir = { w:'fwd', s:'bwd', a:'left', d:'right', ArrowUp:'fwd', ArrowDown:'bwd', ArrowLeft:'left', ArrowRight:'right' };
+  let moveInterval = null, heldKey = null, heading = 0;
+
+  function startMove(dir) {
+    if (moveInterval) return;
+    moveInterval = setInterval(() => {
+      if (dir === 'left') heading = (heading - 3 + 360) % 360;
+      if (dir === 'right') heading = (heading + 3) % 360;
+    }, 60);
+  }
+
+  function stopMove() {
+    if (moveInterval) { clearInterval(moveInterval); moveInterval = null; }
+  }
+
+  ['fwd', 'bwd', 'left', 'right'].forEach(dir => {
+    const btn = document.getElementById(btnForDir[dir]);
+    ['mousedown', 'touchstart'].forEach(ev => btn.addEventListener(ev, e => {
+      e.preventDefault();
+      btn.classList.add('active');
+      startMove(dir);
+    }));
+    ['mouseup', 'mouseleave', 'touchend'].forEach(ev => btn.addEventListener(ev, () => {
+      btn.classList.remove('active');
+      stopMove();
+    }));
+  });
+
+  document.addEventListener('keydown', e => {
+    const dir = keyDir[e.key];
+    if (!dir || heldKey === dir) return;
+    e.preventDefault();
+    heldKey = dir;
+    document.getElementById(btnForDir[dir]).classList.add('active');
+    startMove(dir);
+  });
+
+  document.addEventListener('keyup', e => {
+    const dir = keyDir[e.key];
+    if (!dir) return;
+    heldKey = null;
+    document.getElementById(btnForDir[dir]).classList.remove('active');
+    stopMove();
+  });
+
+  setInterval(() => {
+    const mag = 330 + Math.round(Math.random() * 30 + heading * 0.1);
+    document.getElementById('mag-val').innerHTML = mag + '<span class="sensor-unit"> µT</span>';
+
+    const ir = Math.round((0.45 + Math.random() * 0.45) * 100) / 100;
+    document.getElementById('ir-val').innerHTML = ir.toFixed(2) + '<span class="sensor-unit"> V</span>';
+    document.getElementById('ir-bar').style.width = (ir / 0.9 * 100).toFixed(0) + '%';
+
+    const rssi = -(40 + Math.round(Math.random() * 30));
+    const rssiPct = Math.round(((rssi + 100) / 60) * 100);
+    document.getElementById('rssi-val').innerHTML = rssi + '<span class="sensor-unit"> dBm</span>';
+    document.getElementById('rssi-bar').style.width = Math.max(5, rssiPct) + '%';
+  }, 800);
+</script> -->
+
+</body>
+</html>
