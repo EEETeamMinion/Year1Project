@@ -3,6 +3,7 @@
 #include <ArduinoMqttClient.h>
 #include <vector>
 #include <algorithm>
+#include <math.h>
 
 
 
@@ -14,7 +15,7 @@ const int left_pwm_pin = 3;
 const int right_dir_pin = 8;
 const int right_pwm_pin = 9;
 
-std::vector<char> motion_array = {};
+std::vector<int> wasd_array = {0,0,0,0};
 
 const char* network_ssid = "Violakii";
 const char* network_password = "88888888";
@@ -25,14 +26,14 @@ const char* mqtt_move_topic = "imperialeeet4/move";
 const String mqtt_sensor_topic = "imperialeeet4/sensors";
 
 
-void move(const int left_dir, const int left_pwm, const int right_dir, const int right_pwm){
-  digitalWrite(left_dir_pin, left_dir);
-  digitalWrite(right_dir_pin, right_dir);
-  analogWrite(left_pwm_pin,left_pwm);
-  analogWrite(right_pwm_pin,right_pwm);
+void move(const int left, const int right){
+  digitalWrite(left_dir_pin, (left >0));
+  digitalWrite(right_dir_pin, (right<0));
+  analogWrite(left_pwm_pin,abs(left));
+  analogWrite(right_pwm_pin,abs(right));
 }
 
-void handle_movement_command(const char code) {
+void handle_movement_command(char code) {
   // Message Commands:
   // w press: w
   // w release : x
@@ -44,45 +45,62 @@ void handle_movement_command(const char code) {
   // d release: e
   Serial.print("Received movement command: ");
   Serial.println(code);
+  int value;
   if (code == 'w'||code == 'a'||code == 's'||code == 'd'){
-    if (std::find(motion_array.begin(), motion_array.end(), code) == motion_array.end()){
-      motion_array.push_back(code);
-    }
+    value = 1;
+  }
+  else{
+    code = char(code-1);
+    value = 0;
   }
 
-  else{
-    char remove_code = char(code-1);
-    motion_array.erase(remove(motion_array.begin(), motion_array.end(), remove_code), motion_array.end());
+  switch(code){
+    case 'w':
+      wasd_array[0] = value;
+      break;
+    case 'a':
+      wasd_array[1] = value;
+      break;
+    case 's':
+      wasd_array[2] = value;
+      break;
+    case 'd':
+      wasd_array[3] = value;
+      break;
+    default:
+      break;
   }
+
+  const int throttle = wasd_array[0] - wasd_array[2];
+  const int turn = (throttle >= 0 ? 1:-1)*(wasd_array[1] - wasd_array[3]); //steering of car is mirrored in backward motion
+  const double turn_factor = 0.4;
+  double left  = throttle + turn_factor * turn;
+  double right = throttle - turn_factor * turn;
+  double max_val = max(abs(left),abs(right));
+  if (max_val!=0){
+    left = 255*left/max_val;
+    right = 255*right/max_val;
+  }
+  else{
+    left = right = 0;
+  }
+
+  move(left,right);
+  
 
   Serial.print("Current motion_array: ");
-  if (!motion_array.empty()){
-    for (int x : motion_array) {
-        Serial.print(char(x));
+  if (!wasd_array.empty()){
+    for (int x : wasd_array) {
+        Serial.print(int(x));
     }
   }
   Serial.println("");
   Serial.print("Now executing: ");
-  Serial.println(motion_array.back());
-
-  switch(motion_array.back()){
-    case 'w':
-      move(HIGH,255,LOW,255);
-      break;
-    case 'a':
-      move(HIGH,255,HIGH,255);
-      break;
-    case 's':
-      move(LOW,255,HIGH,255);
-      break;
-    case 'd':
-      move(LOW,255,LOW,255);
-      break;
-    default:
-      move(LOW,0,LOW,0);
-      break;
-  }
+  Serial.print(left);
+  Serial.print(" ");
+  Serial.print(right);
 }
+
 
 void publish_sensor_data(const String sensor, const float reading) {
   mqtt.beginMessage(mqtt_sensor_topic + '/' + sensor);
