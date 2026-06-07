@@ -71,8 +71,8 @@ void handle_movement_command(char code) {
       break;
   }
 
-  const int throttle = wasd_array[0] - wasd_array[2];
-  const int turn = (throttle >= 0 ? 1:-1)*(wasd_array[1] - wasd_array[3]); //steering of car is mirrored in backward motion
+  const int throttle = wasd_array[2] - wasd_array[0];
+  const int turn = (throttle <= 0 ? 1:-1)*(wasd_array[1] - wasd_array[3]); //steering of car is mirrored in backward motion
   const double turn_factor = 0.4;
   double left  = throttle + turn_factor * turn;
   double right = throttle - turn_factor * turn;
