@@ -1,0 +1,10 @@
+This folder contains every circuit design over the course of creating the ultrasound detector
+Amplification.asc contains the non-inverting op-amp design
+Bandpass filter ultrasound.asc contains the RC filter
+Comparator.asc is the design for the Schmitt Trigger
+Envelope detector.asc is the design for the envelope detector to be used as a rectifier
+Full wave precision rectifier.asc contains the design for the precision rectifier
+Sallen Key Filter.asc is the design for the bandpass filter using a Sallen Key configuration
+The various "Ultrasonic Full Circuit..." asc files contain iterations of the detector circuit
+Ultrasonic Full Circuit FINAL.asc contains my initial final design which was then found to not work well in practice
+Ultrasonic Full Circuit FINAL FINAL.asc contains the revised design which does work
